@@ -1,0 +1,144 @@
+openapi: 3.1.0
+
+info:
+  title: Flashy Wallet API
+  version: 1.0.0
+  description: |
+    The service-to-service write path into the gold ledger.
+
+    This documents an endpoint that already exists and is already dormant in
+    FlashyGoldAMS at `POST /api/v1/internal/wallet/credit`. Writing the spec
+    down is the first step in making it a contract rather than an
+    implementation detail two teams happen to agree about.
+
+    Three things are mandatory on every mutating call, and none of them are
+    optional conveniences:
+
+    - **Service identity.** `x-internal-key`, a trust boundary deliberately
+      separate from the admin key (people and cron) and from user sessions.
+      This is a third, narrower boundary: another service, not a person.
+    - **An idempotency key derived from the event.** `duel-win:{duelId}`, never
+      a timestamp. A key that differs on every retry is the absence of one
+      wearing the costume of one, and that exact mistake reached production
+      three times.
+    - **A source.** Every entry has to be able to say what caused it.
+
+    Breaking changes mint `wallet.v2.yaml`. A consumer that cannot be
+    redeployed in lockstep is the normal case, not the exception.
+
+servers:
+  - url: https://claimyour.gold/api/v1/internal
+    description: Production. Not reachable from the public internet.
+
+security:
+  - internalKey: []
+
+paths:
+  /wallet/credit:
+    post:
+      operationId: creditWallet
+      summary: Credit an identity's balance
+      description: |
+        Posts a credit and returns the resulting entry.
+
+        Replaying a request with an idempotency key that has already been used
+        returns the original entry and writes nothing. Callers should treat a
+        replay as success, because it is: the credit happened.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditRequest'
+      responses:
+        '200':
+          description: Credited, or replayed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntry'
+        '400':
+          description: The request failed validation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Missing or wrong service key.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: No such customer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    internalKey:
+      type: apiKey
+      in: header
+      name: x-internal-key
+
+  schemas:
+    CreditRequest:
+      type: object
+      required: [customerId, amount, entryType, sourceType, idempotencyKey]
+      properties:
+        customerId:
+          type: string
+          minLength: 1
+        amount:
+          type: number
+          exclusiveMinimum: 0
+          description: |
+            Positive. This endpoint credits; it has no debit mode, because a
+            single endpoint that does both invites a sign error at the caller.
+
+            Precision is bounded by the asset — gold settles to two decimal
+            places, and an amount carrying more is rejected rather than
+            rounded. Rounding in the caller's favour is a choice the caller
+            should not get to make silently.
+        entryType:
+          type: string
+          description: Ledger entry type, e.g. EARN_QUEST.
+        sourceType:
+          type: string
+          minLength: 1
+          description: What kind of thing caused this, e.g. QUEST_COMPLETION.
+        sourceId:
+          type: string
+          description: The specific thing that caused it, e.g. a quest slug.
+        idempotencyKey:
+          type: string
+          minLength: 1
+          description: |
+            Derived from the event, deterministic across retries. Never a
+            clock reading.
+          examples: ['quest:cust_1:first-login', 'duel-win:duel_42']
+        description:
+          type: string
+      additionalProperties: false
+
+    LedgerEntry:
+      type: object
+      required: [id, customerId, amount, balanceAfter, idempotencyKey, createdAt]
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        amount: { type: number }
+        balanceAfter:
+          type: number
+          description: The balance after this entry. On a replay, the balance after the original.
+        entryType: { type: string }
+        sourceType: { type: string }
+        sourceId: { type: string }
+        idempotencyKey: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code: { type: string }

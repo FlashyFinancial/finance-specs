@@ -1,0 +1,16 @@
+{
+  "name": "finance-specs",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "description": "FlashyFinancial's OpenAPI contracts — the canonical home for wallet.v1, moved from flashy-contracts.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "lint:specs": "redocly lint specs/*.yaml",
+    "specs:index": "node scripts/index-specs.mjs",
+    "specs:check": "node scripts/index-specs.mjs --check"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.63.0"
+  }
+}

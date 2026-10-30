@@ -1,0 +1,12 @@
+{
+  "contract": "openapi-index/1",
+  "generated": "2026-10-30T03:21:39.657Z",
+  "specs": [
+    {
+      "name": "wallet.v1",
+      "version": "1.0.0",
+      "path": "specs/wallet.v1.yaml",
+      "sha256": "c156c125c34186b037b0da1eca6812ce65e678fc7da101c6060cf2ea83c2e1cf"
+    }
+  ]
+}
